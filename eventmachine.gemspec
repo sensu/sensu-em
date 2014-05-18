@@ -5,7 +5,7 @@ require "em/version"
 
 Gem::Specification.new do |s|
   s.name = 'sensu-em'
-  s.version = EventMachine::VERSION
+  s.version = '2.0.0'
   s.homepage = 'http://rubyeventmachine.com'
   s.rubyforge_project = 'eventmachine'
   s.licenses = ["Ruby", "GPL"]
