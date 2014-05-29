@@ -74,7 +74,6 @@ public class EventableDatagramChannel extends EventableChannel<DatagramPacket> {
 	}
 	
 	public boolean scheduleClose (boolean afterWriting) {
-		System.out.println ("NOT SCHEDULING CLOSE ON DATAGRAM");
 		return false;
 	}
 	
