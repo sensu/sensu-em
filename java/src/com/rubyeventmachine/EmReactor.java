@@ -274,9 +274,11 @@ public class EmReactor {
 			callback.trigger(ec.getBinding(), EventCode.EM_CONNECTION_UNBOUND, null, (long) 0);
 			ec.close();
 
-			EventableSocketChannel sc = (EventableSocketChannel) ec;
-			if (sc != null && sc.isAttached())
-				DetachedConnections.add (sc);
+                        if (!(ec instanceof EventableDatagramChannel)) {
+                            EventableSocketChannel sc = (EventableSocketChannel) ec;
+                            if (sc != null && sc.isAttached())
+                                DetachedConnections.add (sc);
+                        }
 		}
 
 		for (EventableSocketChannel ec : DetachedConnections) {
