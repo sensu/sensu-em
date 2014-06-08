@@ -120,7 +120,7 @@ static void InitializeDefaultCredentials()
 SslContext_t::SslContext_t
 **************************/
 
-SslContext_t::SslContext_t (bool is_server, const string &privkeyfile, const string &certchainfile, bool use_tls):
+SslContext_t::SslContext_t (bool is_server, const string &privkeyfile, const string &certchainfile, bool use_tls, const string &cipherlist):
 	pCtx (NULL),
 	PrivateKey (NULL),
 	Certificate (NULL)
@@ -177,7 +177,10 @@ SslContext_t::SslContext_t (bool is_server, const string &privkeyfile, const str
 		assert (e > 0);
 	}
 
-	SSL_CTX_set_cipher_list (pCtx, "ALL:!ADH:!LOW:!EXP:!DES-CBC3-SHA:@STRENGTH");
+       if (cipherlist.length() > 0)
+               SSL_CTX_set_cipher_list (pCtx, cipherlist.c_str());
+       else
+               SSL_CTX_set_cipher_list (pCtx, "ALL:!ADH:!LOW:!EXP:!DES-CBC3-SHA:@STRENGTH");
 
 	if (is_server) {
 		SSL_CTX_sess_set_cache_size (pCtx, 128);
@@ -220,7 +223,7 @@ SslContext_t::~SslContext_t()
 SslBox_t::SslBox_t
 ******************/
 
-SslBox_t::SslBox_t (bool is_server, const string &privkeyfile, const string &certchainfile, bool verify_peer, bool use_tls, const unsigned long binding):
+SslBox_t::SslBox_t (bool is_server, const string &privkeyfile, const string &certchainfile, bool verify_peer, bool use_tls, const string &cipherlist, const unsigned long binding):
 	bIsServer (is_server),
 	bHandshakeCompleted (false),
 	bVerifyPeer (verify_peer),
@@ -233,7 +236,7 @@ SslBox_t::SslBox_t (bool is_server, const string &privkeyfile, const string &cer
 	 * a new one every time we come here.
 	 */
 
-	Context = new SslContext_t (bIsServer, privkeyfile, certchainfile, use_tls);
+       Context = new SslContext_t (bIsServer, privkeyfile, certchainfile, use_tls, cipherlist);
 	assert (Context);
 
 	pbioRead = BIO_new (BIO_s_mem());

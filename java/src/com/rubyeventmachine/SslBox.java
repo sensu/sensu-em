@@ -49,6 +49,7 @@ public class SslBox {
 
 			sslContext.init(keyManagers, new TrustManager[] { tm }, null);
 			sslEngine = sslContext.createSSLEngine(host, port);
+                       sslEngine.setEnabledCipherSuites(sslEngine.getSupportedCipherSuites());
 			sslEngine.setUseClientMode(!isServer);
 			sslEngine.setNeedClientAuth(verifyPeer);
 			

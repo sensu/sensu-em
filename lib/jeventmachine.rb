@@ -269,7 +269,7 @@ module EventMachine
     @em.getConnectionCount
   end
 
-  def self.set_tls_parms(sig, privkeyfile, certchainfile, verify_peer)
+  def self.set_tls_parms(sig, privkeyfile, certchainfile, verify_peer, use_tls, cipher_list)
     keystore = KeyStoreBuilder.create privkeyfile, certchainfile unless (privkeyfile.empty? or certchainfile.empty?) 
     @em.setTlsParms(sig, keystore, (!!verify_peer))
   end
