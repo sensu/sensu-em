@@ -382,6 +382,8 @@ module EventMachine
     #
     # @option args [Boolean] :use_tls (false)       indicates whether TLS or SSL must be offered to the peer. If true TLS is used, SSL otherwise.
     #
+    # @option args [String] :cipher_list ("ALL:!ADH:!LOW:!EXP:!DES-CBC3-SHA:@STRENGTH") indicates the available SSL cipher values.
+    #
     # @example Using TLS with EventMachine
     #
     #  require 'rubygems'
@@ -406,7 +408,7 @@ module EventMachine
     #
     # @see #ssl_verify_peer
     def start_tls args={}
-      priv_key, cert_chain, verify_peer, use_tls = args.values_at(:private_key_file, :cert_chain_file, :verify_peer, :use_tls)
+      priv_key, cert_chain, verify_peer, use_tls, cipher_list = args.values_at(:private_key_file, :cert_chain_file, :verify_peer, :use_tls, :cipher_list)
 
       [priv_key, cert_chain].each do |file|
         next if file.nil? or file.empty?
@@ -414,7 +416,7 @@ module EventMachine
         "Could not find #{file} for start_tls" unless File.exists? file
       end
 
-      EventMachine::set_tls_parms(@signature, priv_key || '', cert_chain || '', verify_peer, (use_tls ? true : false))
+      EventMachine::set_tls_parms(@signature, priv_key || '', cert_chain || '', verify_peer, (use_tls ? true : false), cipher_list || '')
       EventMachine::start_tls @signature
     end
 
