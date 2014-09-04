@@ -458,7 +458,7 @@ extern "C" int ssl_verify_wrapper(int preverify_ok, X509_STORE_CTX *ctx)
 
 	cert = X509_STORE_CTX_get_current_cert(ctx);
 	ssl = (SSL*) X509_STORE_CTX_get_ex_data(ctx, SSL_get_ex_data_X509_STORE_CTX_idx());
-	binding = (unsigned long) SSL_get_ex_data(ssl, 0);
+	binding = (intptr_t) SSL_get_ex_data(ssl, 0);
 
 	out = BIO_new(BIO_s_mem());
 	PEM_write_bio_X509(out, cert);
