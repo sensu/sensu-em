@@ -23,24 +23,16 @@ def append_library(libs, lib)
 end
 
 def manual_ssl_config
-  ssl_libs_heads_args = {
-    :unix => [%w[ssl crypto], %w[openssl/ssl.h openssl/err.h]],
-    :mswin => [%w[ssleay32 eay32], %w[openssl/ssl.h openssl/err.h]],
-  }
-
   dc_flags = ['ssl']
   dc_flags += ["#{ENV['OPENSSL']}/include", ENV['OPENSSL']] if /linux/ =~ RUBY_PLATFORM and ENV['OPENSSL']
 
-  libs, heads = case RUBY_PLATFORM
-  when /mswin/    ; ssl_libs_heads_args[:mswin]
-  else              ssl_libs_heads_args[:unix]
-  end
+  libs, heads = [%w[ssl crypto], %w[openssl/ssl.h openssl/err.h]]
   dir_config(*dc_flags)
   check_libs(libs) and check_heads(heads)
 end
 
 if ENV['CROSS_COMPILING']
-  openssl_version = ENV.fetch("OPENSSL_VERSION", "1.0.0j")
+  openssl_version = ENV.fetch("OPENSSL_VERSION", "1.0.0i")
   openssl_dir = File.expand_path("~/.rake-compiler/builds/openssl-#{openssl_version}/")
   if File.exists?(openssl_dir)
     FileUtils.mkdir_p Dir.pwd+"/openssl/"

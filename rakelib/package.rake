@@ -23,7 +23,9 @@ if RUBY_PLATFORM =~ /java/
   end
 else
   def setup_cross_compilation(ext)
-    unless RUBY_PLATFORM =~ /mswin|mingw/
+    if RUBY_PLATFORM =~ /mswin|mingw/
+      ext.config_options = "--with-opt-dir=c:/openssl"
+    else
       ext.cross_compile = true
       ext.cross_platform = ['x86-mingw32', 'x86-mswin32-60']
     end
