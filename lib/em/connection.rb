@@ -413,10 +413,19 @@ module EventMachine
       [priv_key, cert_chain].each do |file|
         next if file.nil? or file.empty?
         raise FileNotFoundException,
-        "Could not find #{file} for start_tls" unless File.exists? file
+        "Could not find #{file} for start_tls" unless File.exist?(file)
       end
 
-      EventMachine::set_tls_parms(@signature, priv_key || '', cert_chain || '', verify_peer, (use_tls ? true : false), cipher_list || '')
+      tls_parms = [
+        @signature,
+        priv_key || '',
+        cert_chain || '',
+        verify_peer,
+        !!use_tls,
+        cipher_list || ''
+      ].shift(EventMachine.method(:set_tls_parms).arity.abs)
+
+      EventMachine::set_tls_parms(*tls_parms)
       EventMachine::start_tls @signature
     end
 
