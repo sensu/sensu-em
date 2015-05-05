@@ -34,6 +34,7 @@ import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.DatagramChannel;
+import java.util.LinkedList;
 import java.io.*;
 import java.net.*;
 
@@ -41,13 +42,17 @@ public class EventableDatagramChannel extends EventableChannel<DatagramPacket> {
 	
 	DatagramChannel channel;
 	boolean bCloseScheduled;
+	LinkedList<DatagramPacket> outboundQ;
+	long outboundS;
+
 	SocketAddress returnAddress;
 
 	public EventableDatagramChannel (DatagramChannel dc, long _binding, Selector sel, EventCallback callback) throws ClosedChannelException {
 		super(_binding, sel, callback);
 		channel = dc;
 		bCloseScheduled = false;
-		
+		outboundQ = new LinkedList<DatagramPacket>();
+		outboundS = 0;
 		dc.register(selector, SelectionKey.OP_READ, this);
 	}
 
@@ -55,6 +60,7 @@ public class EventableDatagramChannel extends EventableChannel<DatagramPacket> {
  		try {
 			if ((!bCloseScheduled) && (bb.remaining() > 0)) {
 				outboundQ.addLast(new DatagramPacket(bb, returnAddress));
+				outboundS += bb.remaining();
  				channel.register(selector, SelectionKey.OP_WRITE | SelectionKey.OP_READ, this);
 			}
 		} catch (ClosedChannelException e) {
@@ -66,6 +72,7 @@ public class EventableDatagramChannel extends EventableChannel<DatagramPacket> {
  		try {
 			if ((!bCloseScheduled) && (bb.remaining() > 0)) {
 				outboundQ.addLast(new DatagramPacket (bb, new InetSocketAddress (recipAddress, recipPort)));
+				outboundS += bb.remaining();
  				channel.register(selector, SelectionKey.OP_WRITE | SelectionKey.OP_READ, this);
 			}
 		} catch (ClosedChannelException e) {
@@ -115,6 +122,7 @@ public class EventableDatagramChannel extends EventableChannel<DatagramPacket> {
 			try {
 				// With a datagram socket, it's ok to send an empty buffer.
 				written = channel.send(p.bb, p.recipient);
+				outboundS -= written;
 			}
 			catch (IOException e) {
 				return false;
@@ -166,6 +174,8 @@ public class EventableDatagramChannel extends EventableChannel<DatagramPacket> {
 	public boolean isWatchOnly() { return false; }
 	public boolean isNotifyReadable() { return false; }
 	public boolean isNotifyWritable() { return false; }
+
+	public long getOutboundDataSize() { return outboundS; }
 
 	@Override
 	protected boolean handshakeNeeded() {

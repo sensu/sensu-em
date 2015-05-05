@@ -86,7 +86,7 @@ Here's a fully-functional echo server written with EventMachine:
 
 ## EventMachine documentation ##
 
-Currently we only have [reference documentation](http://eventmachine.rubyforge.org) and a [wiki](https://github.com/eventmachine/eventmachine/wiki).
+Currently we only have [reference documentation](http://rdoc.info/github/eventmachine/eventmachine/frames) and a [wiki](https://github.com/eventmachine/eventmachine/wiki).
 
 
 ## Community and where to get help ##
@@ -105,5 +105,4 @@ Copyright: (C) 2006-07 by Francis Cianfrocca. All Rights Reserved.
 
 ## Alternatives ##
 
-If you are unhappy with EventMachine and want to use Ruby, check out [Cool.io](http://coolio.github.com/).
-One caveat: by May 2011, it did not support JRuby and Windows.
+If you are unhappy with EventMachine and want to use Ruby, check out [Celluloid](https://celluloid.io/).

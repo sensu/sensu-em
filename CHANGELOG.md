@@ -1,6 +1,46 @@
 # Changelog
 
-## 1.0.4
+## 1.0.7 (February 10, 2015)
+* fix delay in kqueue/epoll reactor shutdown when timers exist [#587]
+* fix memory leak introduced in v1.0.5 [#586]
+* expose EM.set_simultaneous_accept_count [#420]
+* fix busy loop when EM.run and EM.next_tick are invoked from exception handler [#452]
+
+## 1.0.6 (February 3, 2015)
+* add support for Rubinius Process::Status [#568]
+* small bugfixes for SmtpServer [#449]
+* update buftok.rb [#547]
+* fix assertion on Write() [#525]
+* work around mkmf.rb bug preventing gem installation [#574]
+* add pause/resume support to jruby reactor [#556]
+* fix pure ruby reactor to use 127.0.0.1 instead of localhost [#439]
+* fix compilation under macruby [#243]
+* add chunked encoding to http client [#111]
+* fix errors on win32 when dealing with pipes [1ea45498] [#105]
+
+## 1.0.5 (February 2, 2015)
+* use monotonic clocks on Linux, OS X, Solaris, and Windows [#563]
+* use the rb_fd_* API to get autosized fd_sets [#502]
+* add basic tests that the DNS resolver isn't leaking timers [#571]
+* update to test-unit 2.x and improve various unit tests [#551]
+* remove EventMachine_t::Popen code marked by ifdef OBSOLETE [#551]
+* ruby 2.0 may fail at Queue.pop, so rescue and complain to $stderr [#551]
+* set file handle to INVALID_HANDLE_VALUE after closing the file [#565]
+* use `defined?` instead of rescuing NameError for flow control [#535]
+* fix closing files and sockets on Windows [#564]
+* fix file uploads in Windows [#562]
+* catch failure to fork [#539]
+* use chunks for SSL write [#545]
+
+## 1.0.4 (December 19, 2014)
+* add starttls_options to smtp server [#552]
+* fix closesocket on windows [#497]
+* fix build on ruby 2.2 [#503]
+* fix build error on ruby 1.9 [#508]
+* fix timer leak during dns resolution [#489]
+* add concurrency validation to EM::Iterator [#468]
+* add get_file_descriptor to get fd for a signature [#467]
+* add EM.attach_server and EM.attach_socket_server [#465, #466]
 * calling pause from receive_data takes effect immediately [#464]
 * reactor_running? returns false after fork [#455]
 * fix infinite loop on double close [edc4d0e6, #441, #445]

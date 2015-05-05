@@ -22,10 +22,10 @@ See the file COPYING for complete licensing information.
 
 #ifdef BUILD_FOR_RUBY
   #include <ruby.h>
-
   #ifdef HAVE_RB_THREAD_FD_SELECT
     #define EmSelect rb_thread_fd_select
   #else
+    // ruby 1.9.1 and below
     #define EmSelect rb_thread_select
   #endif
 
@@ -69,9 +69,33 @@ See the file COPYING for complete licensing information.
   #define EmSelect select
 #endif
 
+#if !defined(HAVE_RB_FDSET_T)
+#define fd_check(n) (((n) < FD_SETSIZE) ? 1 : 0*fprintf(stderr, "fd %d too large for select\n", (n)))
+// These definitions are cribbed from include/ruby/intern.h in Ruby 1.9.3,
+// with this change: any macros that read or write the nth element of an
+// fdset first call fd_check to make sure n is in bounds.
+typedef fd_set rb_fdset_t;
+#define rb_fd_zero(f) FD_ZERO(f)
+#define rb_fd_set(n, f) do { if (fd_check(n)) FD_SET((n), (f)); } while(0)
+#define rb_fd_clr(n, f) do { if (fd_check(n)) FD_CLR((n), (f)); } while(0)
+#define rb_fd_isset(n, f) (fd_check(n) ? FD_ISSET((n), (f)) : 0)
+#define rb_fd_copy(d, s, n) (*(d) = *(s))
+#define rb_fd_dup(d, s) (*(d) = *(s))
+#define rb_fd_resize(n, f)  ((void)(f))
+#define rb_fd_ptr(f)  (f)
+#define rb_fd_init(f) FD_ZERO(f)
+#define rb_fd_init_copy(d, s) (*(d) = *(s))
+#define rb_fd_term(f) ((void)(f))
+#define rb_fd_max(f)  FD_SETSIZE
+#define rb_fd_select(n, rfds, wfds, efds, timeout)  \
+  select(fd_check((n)-1) ? (n) : FD_SETSIZE, (rfds), (wfds), (efds), (timeout))
+#define rb_thread_fd_select(n, rfds, wfds, efds, timeout)  \
+  rb_thread_select(fd_check((n)-1) ? (n) : FD_SETSIZE, (rfds), (wfds), (efds), (timeout))
+#endif
+
 class EventableDescriptor;
 class InotifyDescriptor;
-
+struct SelectData_t;
 
 /********************
 class EventMachine_t
@@ -82,6 +106,9 @@ class EventMachine_t
 	public:
 		static int GetMaxTimerCount();
 		static void SetMaxTimerCount (int);
+
+		static int GetSimultaneousAcceptCount();
+		static void SetSimultaneousAcceptCount (int);
 
 	public:
 		EventMachine_t (EMCallback);
@@ -175,7 +202,7 @@ class EventMachine_t
 	public:
 		void _ReadLoopBreaker();
 		void _ReadInotifyEvents();
-        int NumCloseScheduled;
+		int NumCloseScheduled;
 
 	private:
 		enum {
@@ -213,8 +240,13 @@ class EventMachine_t
 		unsigned LastTickCount;
 		#endif
 
+		#ifdef OS_DARWIN
+		mach_timebase_info_data_t mach_timebase;
+		#endif
+
 	private:
 		bool bTerminateSignalReceived;
+		SelectData_t *SelectData;
 
 		bool bEpoll;
 		int epfd; // Epoll file-descriptor
@@ -239,13 +271,15 @@ struct SelectData_t
 struct SelectData_t
 {
 	SelectData_t();
+	~SelectData_t();
 
 	int _Select();
+	void _Clear();
 
 	int maxsocket;
-	fd_set fdreads;
-	fd_set fdwrites;
-	fd_set fderrors;
+	rb_fdset_t fdreads;
+	rb_fdset_t fdwrites;
+	rb_fdset_t fderrors;
 	timeval tv;
 	int nSockets;
 };

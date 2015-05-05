@@ -8,7 +8,6 @@ class TestSSLMethods < Test::Unit::TestCase
   end
 
   module ServerHandler
-
     def post_init
       start_tls(:private_key_file => $dir+'server.key', :cert_chain_file => $dir+'server.crt', :verify_peer => true)
     end
@@ -24,7 +23,6 @@ class TestSSLMethods < Test::Unit::TestCase
   end
 
   module ClientHandler
-
     def post_init
       start_tls(:private_key_file => $dir+'client.key', :cert_chain_file => $dir+'client.crt')
     end
@@ -34,10 +32,11 @@ class TestSSLMethods < Test::Unit::TestCase
       $server_cert_value = get_peer_cert
       EM.stop_event_loop
     end
-
   end
 
   def test_ssl_methods
+    omit_unless(EM.ssl?)
+    omit_if(rbx?)
     $server_called_back, $client_called_back = false, false
     $server_cert_value, $client_cert_value = nil, nil
 
@@ -53,4 +52,4 @@ class TestSSLMethods < Test::Unit::TestCase
     assert_equal($client_cert_from_file, $client_cert_value.gsub("\r", ""))
   end
 
-end if EM.ssl?
+end

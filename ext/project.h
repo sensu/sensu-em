@@ -78,6 +78,11 @@ typedef int SOCKET;
 #endif
 #endif /* _AIX */
 
+#ifdef OS_DARWIN
+#include <mach/mach.h>
+#include <mach/mach_time.h>
+#endif /* OS_DARWIN */
+
 #endif /* OS_UNIX */
 
 #ifdef OS_WIN32
@@ -85,7 +90,9 @@ typedef int SOCKET;
 // 18Jun12: fd_setsize must be changed in the ruby binary (not in this extension). redefining it also causes segvs, see eventmachine/eventmachine#333
 //#define FD_SETSIZE 1024
 
+// WIN32_LEAN_AND_MEAN excludes APIs such as Cryptography, DDE, RPC, Shell, and Windows Sockets.
 #define WIN32_LEAN_AND_MEAN
+
 #include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -93,13 +100,10 @@ typedef int SOCKET;
 #include <fcntl.h>
 #include <assert.h>
 
-#define close closesocket
-
-typedef int socklen_t;
-#ifndef _PID_T_
-#define _PID_T_
-typedef int pid_t;
-#endif /* _PID_T_ */
+// Use the Win32 wrapper library that Ruby owns to be able to close sockets with the close() function
+#define RUBY_EXPORT
+#include <ruby/defines.h>
+#include <ruby/win32.h>
 #endif /* OS_WIN32 */
 
 #if !defined(_MSC_VER) || _MSC_VER > 1500

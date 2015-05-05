@@ -39,10 +39,13 @@ def manual_ssl_config
   check_libs(libs) and check_heads(heads)
 end
 
+# Eager check devs tools
+have_devel? if respond_to?(:have_devel?)
+
 if ENV['CROSS_COMPILING']
-  openssl_version = ENV.fetch("OPENSSL_VERSION", "1.0.0j")
+  openssl_version = ENV.fetch("OPENSSL_VERSION", "1.0.1i")
   openssl_dir = File.expand_path("~/.rake-compiler/builds/openssl-#{openssl_version}/")
-  if File.exists?(openssl_dir)
+  if File.exist?(openssl_dir)
     FileUtils.mkdir_p Dir.pwd+"/openssl/"
     FileUtils.cp Dir[openssl_dir+"/include/openssl/*.h"], Dir.pwd+"/openssl/", :verbose => true
     FileUtils.cp Dir[openssl_dir+"/lib*.a"], Dir.pwd, :verbose => true
@@ -72,6 +75,7 @@ add_define "HAVE_INOTIFY" if inotify = have_func('inotify_init', 'sys/inotify.h'
 add_define "HAVE_OLD_INOTIFY" if !inotify && have_macro('__NR_inotify_init', 'sys/syscall.h')
 add_define 'HAVE_WRITEV' if have_func('writev', 'sys/uio.h')
 add_define 'HAVE_RB_THREAD_FD_SELECT' if have_func('rb_thread_fd_select')
+add_define 'HAVE_RB_FDSET_T' if have_type('rb_fdset_t', 'ruby/intern.h')
 
 have_func('rb_wait_for_single_fd')
 have_func('rb_enable_interrupt')
@@ -139,6 +143,8 @@ when /openbsd/
   CONFIG['LDSHAREDXX'] = "$(CXX) -shared -lstdc++ -fPIC"
 
 when /darwin/
+  add_define 'OS_DARWIN'
+
   # on Unix we need a g++ link, not gcc.
   # Ff line contributed by Daniel Harple.
   CONFIG['LDSHARED'] = "$(CXX) " + CONFIG['LDSHARED'].split[1..-1].join(' ')
@@ -166,6 +172,14 @@ else
   CONFIG['LDSHARED'] = "$(CXX) -shared"
 end
 
+# Platform-specific time functions
+if have_func('clock_gettime')
+  # clock_gettime is POSIX, but the monotonic clocks are not
+  have_const('CLOCK_MONOTONIC_RAW', 'time.h') # Linux
+  have_const('CLOCK_MONOTONIC', 'time.h') # Linux, Solaris, BSDs
+else
+  have_func('gethrtime') # Older Solaris and HP-UX
+end
 
 # solaris c++ compiler doesn't have make_pair()
 TRY_LINK.sub!('$(CC)', '$(CXX)')

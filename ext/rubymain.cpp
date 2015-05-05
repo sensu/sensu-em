@@ -408,8 +408,22 @@ static VALUE t_get_subprocess_status (VALUE self, VALUE signature)
 	if (evma_get_subprocess_status (NUM2ULONG (signature), &status)) {
 		if (evma_get_subprocess_pid (NUM2ULONG (signature), &pid)) {
 			proc_status = rb_obj_alloc(rb_cProcStatus);
+
+			/* MRI Ruby uses hidden instance vars */
 			rb_iv_set(proc_status, "status", INT2FIX(status));
 			rb_iv_set(proc_status, "pid", INT2FIX(pid));
+
+#ifdef RUBINIUS
+			/* Rubinius uses standard instance vars */
+			rb_iv_set(proc_status, "@pid", INT2FIX(pid));
+			if (WIFEXITED(status)) {
+				rb_iv_set(proc_status, "@status", INT2FIX(WEXITSTATUS(status)));
+			} else if(WIFSIGNALED(status)) {
+				rb_iv_set(proc_status, "@termsig", INT2FIX(WTERMSIG(status)));
+			} else if(WIFSTOPPED(status)){
+				rb_iv_set(proc_status, "@stopsig", INT2FIX(WSTOPSIG(status)));
+			}
+#endif
 		}
 	}
 
@@ -611,7 +625,7 @@ static VALUE t_set_sock_opt (VALUE self, VALUE signature, VALUE lev, VALUE optna
 	int fd = evma_get_file_descriptor (NUM2ULONG (signature));
 	int level = NUM2INT(lev), option = NUM2INT(optname);
 	int i;
-	void *v;
+	const void *v;
 	socklen_t len;
 
 	switch (TYPE(optval)) {
@@ -799,6 +813,21 @@ static VALUE t_set_max_timer_count (VALUE self, VALUE ct)
   return Qnil;
 }
 
+/********************
+t_get/set_simultaneous_accept_count
+********************/
+
+static VALUE t_get_simultaneous_accept_count (VALUE self)
+{
+  return INT2FIX (evma_get_simultaneous_accept_count());
+}
+
+static VALUE t_set_simultaneous_accept_count (VALUE self, VALUE ct)
+{
+  evma_set_simultaneous_accept_count (FIX2INT (ct));
+  return Qnil;
+}
+
 /***************
 t_setuid_string
 ***************/
@@ -833,7 +862,12 @@ static VALUE t_invoke_popen (VALUE self, VALUE cmd)
 	}
 	strings[len] = NULL;
 
-	const unsigned long f = evma_popen (strings);
+	unsigned long f = 0;
+	try {
+		f = evma_popen (strings);
+	} catch (std::runtime_error e) {
+		f = 0; // raise exception below
+	}
 	if (!f) {
 		char *err = strerror (errno);
 		char buf[100];
@@ -1271,6 +1305,8 @@ extern "C" void Init_rubyeventmachine()
 	rb_define_module_function (EmModule, "set_timer_quantum", (VALUE(*)(...))t_set_timer_quantum, 1);
 	rb_define_module_function (EmModule, "get_max_timer_count", (VALUE(*)(...))t_get_max_timer_count, 0);
 	rb_define_module_function (EmModule, "set_max_timer_count", (VALUE(*)(...))t_set_max_timer_count, 1);
+	rb_define_module_function (EmModule, "get_simultaneous_accept_count", (VALUE(*)(...))t_get_simultaneous_accept_count, 0);
+	rb_define_module_function (EmModule, "set_simultaneous_accept_count", (VALUE(*)(...))t_set_simultaneous_accept_count, 1);
 	rb_define_module_function (EmModule, "setuid_string", (VALUE(*)(...))t_setuid_string, 1);
 	rb_define_module_function (EmModule, "invoke_popen", (VALUE(*)(...))t_invoke_popen, 1);
 	rb_define_module_function (EmModule, "send_file_data", (VALUE(*)(...))t_send_file_data, 2);

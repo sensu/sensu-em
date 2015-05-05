@@ -3,7 +3,7 @@
 # Author:: Francis Cianfrocca (gmail: blackhedd)
 # Homepage::  http://rubyeventmachine.com
 # Date:: 8 Apr 2006
-# 
+#
 # See EventMachine and EventMachine::Connection for documentation and
 # usage examples.
 #
@@ -11,17 +11,17 @@
 #
 # Copyright (C) 2006-07 by Francis Cianfrocca. All Rights Reserved.
 # Gmail: blackhedd
-# 
+#
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of either: 1) the GNU General Public License
 # as published by the Free Software Foundation; either version 2 of the
 # License, or (at your option) any later version; or 2) Ruby's License.
-# 
+#
 # See the file COPYING for complete licensing information.
 #
 #---------------------------------------------------------------------------
 #
-# 
+#
 
 # This module provides "glue" for the Java version of the EventMachine reactor core.
 # For C++ EventMachines, the analogous functionality is found in ext/rubymain.cpp,
@@ -269,8 +269,21 @@ module EventMachine
     @em.getConnectionCount
   end
 
+  def self.pause_connection(sig)
+    @em.pauseConnection(sig)
+  end
+  def self.resume_connection(sig)
+    @em.resumeConnection(sig)
+  end
+  def self.connection_paused?(sig)
+    @em.isConnectionPaused(sig)
+  end
+  def self._get_outbound_data_size(sig)
+    @em.getOutboundDataSize(sig)
+  end
+
   def self.set_tls_parms(sig, privkeyfile, certchainfile, verify_peer, use_tls, cipher_list)
-    keystore = KeyStoreBuilder.create privkeyfile, certchainfile unless (privkeyfile.empty? or certchainfile.empty?) 
+    keystore = KeyStoreBuilder.create privkeyfile, certchainfile unless (privkeyfile.empty? or certchainfile.empty?)
     @em.setTlsParms(sig, keystore, (!!verify_peer))
   end
   def self.send_file_data(sig, filename)
@@ -279,6 +292,9 @@ module EventMachine
   class Connection
     def associate_callback_target sig
       # No-op for the time being
+    end
+    def get_outbound_data_size
+      EM._get_outbound_data_size @signature
     end
   end
 end
@@ -305,7 +321,7 @@ module KeyStoreBuilder
 
   def self.create(privkeyfile, certchainfile)
     self.init
-    
+
     key_reader = FileReader.new privkeyfile
     key_pair = PEMReader.new(key_reader).read_object
 

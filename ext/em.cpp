@@ -27,6 +27,11 @@ See the file COPYING for complete licensing information.
  */
 static unsigned int MaxOutstandingTimers = 100000;
 
+/* The number of accept() done at once in a single tick when the acceptor
+ * socket becomes readable.
+ */
+static unsigned int SimultaneousAcceptCount = 10;
+
 
 /* Internal helper to convert strings to internet addresses. IPv6-aware.
  * Not reentrant or threadsafe, optimized for speed.
@@ -61,6 +66,17 @@ void EventMachine_t::SetMaxTimerCount (int count)
 	MaxOutstandingTimers = count;
 }
 
+int EventMachine_t::GetSimultaneousAcceptCount()
+{
+	return SimultaneousAcceptCount;
+}
+
+void EventMachine_t::SetSimultaneousAcceptCount (int count)
+{
+	if (count < 1)
+		count = 1;
+	SimultaneousAcceptCount = count;
+}
 
 
 /******************************
@@ -68,12 +84,12 @@ EventMachine_t::EventMachine_t
 ******************************/
 
 EventMachine_t::EventMachine_t (EMCallback event_callback):
+	NumCloseScheduled (0),
 	HeartbeatInterval(2000000),
 	EventCallback (event_callback),
 	NextHeartbeatTime (0),
 	LoopBreakerReader (-1),
 	LoopBreakerWriter (-1),
-	NumCloseScheduled (0),
 	bTerminateSignalReceived (false),
 	bEpoll (false),
 	epfd (-1),
@@ -84,6 +100,11 @@ EventMachine_t::EventMachine_t (EMCallback event_callback):
 	// Default time-slice is just smaller than one hundred mills.
 	Quantum.tv_sec = 0;
 	Quantum.tv_usec = 90000;
+
+	/* Initialize monotonic timekeeping on OS X before the first call to GetRealTime */
+	#ifdef OS_DARWIN
+	(void) mach_timebase_info(&mach_timebase);
+	#endif
 
 	// Make sure the current loop time is sane, in case we do any initializations of
 	// objects before we start running.
@@ -101,6 +122,7 @@ EventMachine_t::EventMachine_t (EMCallback event_callback):
 	#endif
 
 	_InitializeLoopBreaker();
+	SelectData = new SelectData_t();
 }
 
 
@@ -130,6 +152,8 @@ EventMachine_t::~EventMachine_t()
 		close (epfd);
 	if (kqfd != -1)
 		close (kqfd);
+
+	delete SelectData;
 }
 
 
@@ -187,6 +211,12 @@ void EventMachine_t::ScheduleHalt()
    * The answer is to call evma_stop_machine, which calls here, from a SIGINT handler.
    */
 	bTerminateSignalReceived = true;
+
+	/* Signal the loopbreaker so we break out of long-running select/epoll/kqueue and
+	 * notice the halt boolean is set. Signalling the loopbreaker also uses a single
+	 * signal-safe syscall.
+	 */
+	SignalLoopBreaker();
 }
 
 
@@ -352,16 +382,49 @@ void EventMachine_t::_UpdateTime()
 EventMachine_t::GetRealTime
 ***************************/
 
+// Two great writeups of cross-platform monotonic time are at:
+// http://www.python.org/dev/peps/pep-0418
+// http://nadeausoftware.com/articles/2012/04/c_c_tip_how_measure_elapsed_real_time_benchmarking
+// Uncomment the #pragma messages to confirm which compile-time option was used
 uint64_t EventMachine_t::GetRealTime()
 {
 	uint64_t current_time;
 
-	#if defined(OS_UNIX)
+	#if defined(HAVE_CONST_CLOCK_MONOTONIC_RAW)
+	// #pragma message "GetRealTime: clock_gettime CLOCK_MONOTONIC_RAW"
+	// Linux 2.6.28 and above
+	struct timespec tv;
+	clock_gettime (CLOCK_MONOTONIC_RAW, &tv);
+	current_time = (((uint64_t)(tv.tv_sec)) * 1000000LL) + ((uint64_t)((tv.tv_nsec)/1000));
+
+	#elif defined(HAVE_CONST_CLOCK_MONOTONIC)
+	// #pragma message "GetRealTime: clock_gettime CLOCK_MONOTONIC"
+	// Linux, FreeBSD 5.0 and above, Solaris 8 and above, OpenBSD, NetBSD, DragonflyBSD
+	struct timespec tv;
+	clock_gettime (CLOCK_MONOTONIC, &tv);
+	current_time = (((uint64_t)(tv.tv_sec)) * 1000000LL) + ((uint64_t)((tv.tv_nsec)/1000));
+
+	#elif defined(HAVE_GETHRTIME)
+	// #pragma message "GetRealTime: gethrtime"
+	// Solaris and HP-UX
+	current_time = (uint64_t)gethrtime() / 1000;
+
+	#elif defined(OS_DARWIN)
+	// #pragma message "GetRealTime: mach_absolute_time"
+	// Mac OS X
+	// https://developer.apple.com/library/mac/qa/qa1398/_index.html
+	current_time = mach_absolute_time() * mach_timebase.numer / mach_timebase.denom / 1000;
+
+	#elif defined(OS_UNIX)
+	// #pragma message "GetRealTime: gettimeofday"
+	// Unix fallback
 	struct timeval tv;
 	gettimeofday (&tv, NULL);
 	current_time = (((uint64_t)(tv.tv_sec)) * 1000000LL) + ((uint64_t)(tv.tv_usec));
 
 	#elif defined(OS_WIN32)
+	// #pragma message "GetRealTime: GetTickCount"
+	// Future improvement: use GetTickCount64 in Windows Vista / Server 2008
 	unsigned tick = GetTickCount();
 	if (tick < LastTickCount)
 		TickCountTickover += 1;
@@ -370,6 +433,8 @@ uint64_t EventMachine_t::GetRealTime()
 	current_time *= 1000; // convert to microseconds
 
 	#else
+	// #pragma message "GetRealTime: time"
+	// Universal fallback
 	current_time = (uint64_t)time(NULL) * 1000000LL;
 	#endif
 
@@ -806,11 +871,17 @@ SelectData_t::SelectData_t
 SelectData_t::SelectData_t()
 {
 	maxsocket = 0;
-	FD_ZERO (&fdreads);
-	FD_ZERO (&fdwrites);
-	FD_ZERO (&fderrors);
+	rb_fd_init (&fdreads);
+	rb_fd_init (&fdwrites);
+	rb_fd_init (&fderrors);
 }
 
+SelectData_t::~SelectData_t()
+{
+	rb_fd_term (&fdreads);
+	rb_fd_term (&fdwrites);
+	rb_fd_term (&fderrors);
+}
 
 #ifdef BUILD_FOR_RUBY
 /*****************
@@ -821,7 +892,7 @@ _SelectDataSelect
 static VALUE _SelectDataSelect (void *v)
 {
 	SelectData_t *sd = (SelectData_t*)v;
-	sd->nSockets = select (sd->maxsocket+1, &(sd->fdreads), &(sd->fdwrites), &(sd->fderrors), &(sd->tv));
+	sd->nSockets = select (sd->maxsocket+1, rb_fd_ptr(&(sd->fdreads)), rb_fd_ptr(&(sd->fdwrites)), rb_fd_ptr(&(sd->fderrors)), &(sd->tv));
 	return Qnil;
 }
 #endif
@@ -833,9 +904,11 @@ SelectData_t::_Select
 int SelectData_t::_Select()
 {
 	#if defined(HAVE_RB_THREAD_CALL_WITHOUT_GVL)
+	// added in ruby 1.9.3
 	rb_thread_call_without_gvl ((void *(*)(void *))_SelectDataSelect, (void*)this, RUBY_UBF_IO, 0);
 	return nSockets;
 	#elif defined(HAVE_TBR)
+	// added in ruby 1.9.1, deprecated in ruby 2.0.0
 	rb_thread_blocking_region (_SelectDataSelect, (void*)this, RUBY_UBF_IO, 0);
 	return nSockets;
 	#else
@@ -844,7 +917,13 @@ int SelectData_t::_Select()
 }
 #endif
 
-
+void SelectData_t::_Clear()
+{
+	maxsocket = 0;
+	rb_fd_zero (&fdreads);
+	rb_fd_zero (&fdwrites);
+	rb_fd_zero (&fderrors);
+}
 
 /******************************
 EventMachine_t::_RunSelectOnce
@@ -861,23 +940,17 @@ void EventMachine_t::_RunSelectOnce()
 	// however it has the same problem interoperating with Ruby
 	// threads that select does.
 
-	SelectData_t SelectData;
-	/*
-	fd_set fdreads, fdwrites;
-	FD_ZERO (&fdreads);
-	FD_ZERO (&fdwrites);
-
-	int maxsocket = 0;
-	*/
+	// Get ready for select()
+	SelectData->_Clear();
 
 	// Always read the loop-breaker reader.
 	// Changed 23Aug06, provisionally implemented for Windows with a UDP socket
 	// running on localhost with a randomly-chosen port. (*Puke*)
 	// Windows has a version of the Unix pipe() library function, but it doesn't
 	// give you back descriptors that are selectable.
-	FD_SET (LoopBreakerReader, &(SelectData.fdreads));
-	if (SelectData.maxsocket < LoopBreakerReader)
-		SelectData.maxsocket = LoopBreakerReader;
+	rb_fd_set (LoopBreakerReader, &(SelectData->fdreads));
+	if (SelectData->maxsocket < LoopBreakerReader)
+		SelectData->maxsocket = LoopBreakerReader;
 
 	// prepare the sockets for reading and writing
 	size_t i;
@@ -890,27 +963,28 @@ void EventMachine_t::_RunSelectOnce()
 		assert (sd != INVALID_SOCKET);
 
 		if (ed->SelectForRead())
-			FD_SET (sd, &(SelectData.fdreads));
+			rb_fd_set (sd, &(SelectData->fdreads));
 		if (ed->SelectForWrite())
-			FD_SET (sd, &(SelectData.fdwrites));
+			rb_fd_set (sd, &(SelectData->fdwrites));
 
 		#ifdef OS_WIN32
 		/* 21Sep09: on windows, a non-blocking connect() that fails does not come up as writable.
 		   Instead, it is added to the error set. See http://www.mail-archive.com/openssl-users@openssl.org/msg58500.html
 		*/
-		FD_SET (sd, &(SelectData.fderrors));
+		if (ed->IsConnectPending())
+			rb_fd_set (sd, &(SelectData->fderrors));
 		#endif
 
-		if (SelectData.maxsocket < sd)
-			SelectData.maxsocket = sd;
+		if (SelectData->maxsocket < sd)
+			SelectData->maxsocket = sd;
 	}
 
 
 	{ // read and write the sockets
 		//timeval tv = {1, 0}; // Solaris fails if the microseconds member is >= 1000000.
 		//timeval tv = Quantum;
-		SelectData.tv = _TimeTilNextEvent();
-		int s = SelectData._Select();
+		SelectData->tv = _TimeTilNextEvent();
+		int s = SelectData->_Select();
 		//rb_thread_blocking_region(xxx,(void*)&SelectData,RUBY_UBF_IO,0);
 		//int s = EmSelect (SelectData.maxsocket+1, &(SelectData.fdreads), &(SelectData.fdwrites), NULL, &(SelectData.tv));
 		//int s = SelectData.nSockets;
@@ -933,15 +1007,19 @@ void EventMachine_t::_RunSelectOnce()
 					continue;
 				assert (sd != INVALID_SOCKET);
 
-				if (FD_ISSET (sd, &(SelectData.fdwrites)))
-					ed->Write();
-				if (FD_ISSET (sd, &(SelectData.fdreads)))
+				if (rb_fd_isset (sd, &(SelectData->fdwrites))) {
+					// Double-check SelectForWrite() still returns true. If not, one of the callbacks must have
+					// modified some value since we checked SelectForWrite() earlier in this method.
+					if (ed->SelectForWrite())
+						ed->Write();
+				}
+				if (rb_fd_isset (sd, &(SelectData->fdreads)))
 					ed->Read();
-				if (FD_ISSET (sd, &(SelectData.fderrors)))
+				if (rb_fd_isset (sd, &(SelectData->fderrors)))
 					ed->HandleError();
 			}
 
-			if (FD_ISSET (LoopBreakerReader, &(SelectData.fdreads)))
+			if (rb_fd_isset (LoopBreakerReader, &(SelectData->fdreads)))
 				_ReadLoopBreaker();
 		}
 		else if (s < 0) {
@@ -979,11 +1057,12 @@ void EventMachine_t::_CleanBadDescriptors()
 		tv.tv_sec = 0;
 		tv.tv_usec = 0;
 
-		fd_set fds;
-		FD_ZERO(&fds);
-		FD_SET(sd, &fds);
+		rb_fdset_t fds;
+		rb_fd_init(&fds);
+		rb_fd_set(sd, &fds);
 
-		int ret = select(sd + 1, &fds, NULL, NULL, &tv);
+		int ret = rb_fd_select(sd + 1, &fds, NULL, NULL, &tv);
+		rb_fd_term(&fds);
 
 		if (ret == -1) {
 			if (errno == EBADF)
@@ -1923,47 +2002,6 @@ const unsigned long EventMachine_t::AttachSD (int sd_accept)
 }
 
 
-/*********************
-EventMachine_t::Popen
-*********************/
-#if OBSOLETE
-const char *EventMachine_t::Popen (const char *cmd, const char *mode)
-{
-	#ifdef OS_WIN32
-	throw std::runtime_error ("popen is currently unavailable on this platform");
-	#endif
-
-	// The whole rest of this function is only compiled on Unix systems.
-	// Eventually we need this functionality (or a full-duplex equivalent) on Windows.
-	#ifdef OS_UNIX
-	const char *output_binding = NULL;
-
-	FILE *fp = popen (cmd, mode);
-	if (!fp)
-		return NULL;
-
-	// From here, all early returns must pclose the stream.
-
-	// According to the pipe(2) manpage, descriptors returned from pipe have both
-	// CLOEXEC and NONBLOCK clear. Do NOT set CLOEXEC. DO set nonblocking.
-	if (!SetSocketNonblocking (fileno (fp))) {
-		pclose (fp);
-		return NULL;
-	}
-
-	{ // Looking good.
-		PipeDescriptor *pd = new PipeDescriptor (fp, this);
-		if (!pd)
-			throw std::runtime_error ("unable to allocate pipe");
-		Add (pd);
-		output_binding = pd->GetBinding();
-	}
-
-	return output_binding;
-	#endif
-}
-#endif // OBSOLETE
-
 /**************************
 EventMachine_t::Socketpair
 **************************/
@@ -2349,4 +2387,3 @@ int EventMachine_t::SetHeartbeatInterval(float interval)
 	return 0;
 }
 //#endif // OS_UNIX
-

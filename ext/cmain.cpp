@@ -653,7 +653,6 @@ extern "C" int evma_get_max_timer_count()
 	return EventMachine_t::GetMaxTimerCount();
 }
 
-
 /************************
 evma_set_max_timer_count
 ************************/
@@ -670,6 +669,21 @@ extern "C" void evma_set_max_timer_count (int ct)
 		#endif
 	EventMachine_t::SetMaxTimerCount (ct);
 }
+
+/******************
+evma_get/set_simultaneous_accept_count
+******************/
+
+extern "C" void evma_set_simultaneous_accept_count (int count)
+{
+	EventMachine_t::SetSimultaneousAcceptCount(count);
+}
+
+extern "C" int evma_get_simultaneous_accept_count()
+{
+	return EventMachine_t::GetSimultaneousAcceptCount();
+}
+
 
 /******************
 evma_setuid_string
@@ -762,8 +776,11 @@ extern "C" int evma_send_file_data_to_connection (const unsigned long binding, c
 
 	ensure_eventmachine("evma_send_file_data_to_connection");
 
+#if defined(OS_WIN32)
+	int Fd = open (filename, O_RDONLY|O_BINARY);
+#else
 	int Fd = open (filename, O_RDONLY);
-
+#endif
 	if (Fd < 0)
 		return errno;
 	// From here on, all early returns MUST close Fd.
@@ -784,7 +801,6 @@ extern "C" int evma_send_file_data_to_connection (const unsigned long binding, c
 		close (Fd);
 		return -1;
 	}
-
 
 	r = read (Fd, data, filesize);
 	if (r != filesize) {

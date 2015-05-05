@@ -393,7 +393,7 @@ module EventMachine
       100.times {
         @loopbreak_port = rand(10000) + 40000
         begin
-          @loopbreak_reader.bind "localhost", @loopbreak_port
+          @loopbreak_reader.bind "127.0.0.1", @loopbreak_port
           bound = true
           break
         rescue
@@ -410,7 +410,7 @@ module EventMachine
 
     def signal_loopbreak
       #@loopbreak_writer.write '+' if @loopbreak_writer
-      @loopbreak_writer.send('+',0,"localhost",@loopbreak_port) if @loopbreak_writer
+      @loopbreak_writer.send('+',0,"127.0.0.1",@loopbreak_port) if @loopbreak_writer
     end
 
     def set_timer_quantum interval_in_seconds
