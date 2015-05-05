@@ -52,7 +52,8 @@ public abstract class EventableChannel<OutboundPacketType> {
 
 	public abstract void scheduleOutboundData(ByteBuffer bb);
 
-	public abstract void scheduleOutboundDatagram(ByteBuffer bb, String recipAddress, int recipPort);
+	public abstract void scheduleOutboundDatagram(ByteBuffer bb,
+			String recipAddress, int recipPort);
 
 	public abstract boolean scheduleClose(boolean afterWriting);
 
@@ -70,9 +71,10 @@ public abstract class EventableChannel<OutboundPacketType> {
 	 */
 	public abstract void close();
 
-       public void setCommInactivityTimeout (long seconds) {
-           // NO-OP
-       };
+	public void setCommInactivityTimeout (long seconds) {
+		// TODO
+		System.out.println ("SET COMM INACTIVITY UNIMPLEMENTED IN JRUBY" + seconds);
+	}
 
 	public abstract Object[] getPeerName();
 
@@ -85,12 +87,9 @@ public abstract class EventableChannel<OutboundPacketType> {
 	public abstract boolean isNotifyWritable();
 	
 	protected abstract boolean handshakeNeeded();
-
 	protected abstract boolean performHandshake();
 	
 	protected abstract void readInboundData(ByteBuffer dst) throws IOException;
-
-	public abstract long getOutboundDataSize();
 
 	public boolean read() {
 		if (handshakeNeeded()) {

@@ -1,33 +1,33 @@
 /**
  * $Id$
- *
+ * 
  * Author:: Francis Cianfrocca (gmail: blackhedd)
  * Homepage::  http://rubyeventmachine.com
  * Date:: 15 Jul 2007
- *
+ * 
  * See EventMachine and EventMachine::Connection for documentation and
  * usage examples.
- *
+ * 
  *
  *----------------------------------------------------------------------------
  *
  * Copyright (C) 2006-07 by Francis Cianfrocca. All Rights Reserved.
  * Gmail: blackhedd
- *
+ * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of either: 1) the GNU General Public License
  * as published by the Free Software Foundation; either version 2 of the
  * License, or (at your option) any later version; or 2) Ruby's License.
- *
+ * 
  * See the file COPYING for complete licensing information.
  *
  *---------------------------------------------------------------------------
  *
- *
+ * 
  */
 
 /**
- *
+ * 
  */
 package com.rubyeventmachine;
 
@@ -36,7 +36,6 @@ package com.rubyeventmachine;
  *
  */
 
-import java.util.LinkedList;
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -56,23 +55,18 @@ public class EventableSocketChannel extends EventableChannel<ByteBuffer> {
 	SelectionKey channelKey;
 	SocketChannel channel;
 
-	long binding;
-	LinkedList<ByteBuffer> outboundQ;
-	long outboundS;
-
 	boolean bCloseScheduled;
 	boolean bConnectPending;
 	boolean bWatchOnly;
 	boolean bAttached;
 	boolean bNotifyReadable;
 	boolean bNotifyWritable;
-	boolean bPaused;
-
+	
 	SslBox sslBox;
 	private KeyStore keyStore;
 	private boolean verifyPeer;
 	private boolean bIsServer;
-	private boolean shouldAcceptSslPeer = false;
+	private boolean shouldAcceptSslPeer = false; 	
 
 	public EventableSocketChannel (SocketChannel sc, long _binding, Selector sel, EventCallback callback) {
 		super(_binding, sel, callback);
@@ -84,10 +78,8 @@ public class EventableSocketChannel extends EventableChannel<ByteBuffer> {
 		bNotifyReadable = false;
 		bNotifyWritable = false;
 		bIsServer = false;
-		outboundQ = new LinkedList<ByteBuffer>();
-		outboundS = 0;
 	}
-
+	
 	public SocketChannel getChannel() {
 		return channel;
 	}
@@ -161,19 +153,18 @@ public class EventableSocketChannel extends EventableChannel<ByteBuffer> {
 
 		channel = null;
 	}
-
+	
 	public void scheduleOutboundData (ByteBuffer bb) {
 		if (!bCloseScheduled && bb.remaining() > 0) {
-			outboundQ.addLast(bb);
-                        outboundS += bb.remaining();
+			outboundQ.addLast( bb );
 			updateEvents();
 		}
 	}
-
+	
 	public void scheduleOutboundDatagram (ByteBuffer bb, String recipAddress, int recipPort) {
 		throw new RuntimeException ("datagram sends not supported on this channel");
 	}
-
+	
 	/**
 	 * Called by the reactor when we have selected readable.
 	 */
@@ -183,8 +174,6 @@ public class EventableSocketChannel extends EventableChannel<ByteBuffer> {
 			throw new IOException ("eof");
 	}
 
-	public long getOutboundDataSize() { return outboundS; }
-
 	/**
 	 * Called by the reactor when we have selected writable.
 	 * Return false to indicate an error that should cause the connection to close.
@@ -193,26 +182,27 @@ public class EventableSocketChannel extends EventableChannel<ByteBuffer> {
 	 * this code is written, we're depending on a nonblocking write NOT TO CONSUME
 	 * the whole outbound buffer in this case, rather than firing an exception.
 	 * We should somehow verify that this is indeed Java's defined behavior.
+	 * Also TODO, see if we can use gather I/O rather than one write at a time.
+	 * Ought to be a big performance enhancer.
 	 * @return
 	 */
 	protected boolean writeOutboundData() throws IOException {
-                long toWrite;
 		while (!outboundQ.isEmpty()) {
 			ByteBuffer b = outboundQ.getFirst();
-                        toWrite = b.remaining();
 			if (b.remaining() > 0) {
-				if (sslBox != null)
+				if (sslBox != null) 
 					sslBox.write(b);
 				else
 					channel.write(b);
 			}
 
-                        if (b.remaining() == 0) {
-                            outboundS -= toWrite;
-                            outboundQ.removeFirst();
-                        }
-                        else
-                            break;
+			// Did we consume the whole outbound buffer? If yes,
+			// pop it off and keep looping. If no, the outbound network
+			// buffers are full, so break out of here.
+			if (b.remaining() == 0)
+				outboundQ.removeFirst();
+			else
+				break;
 		}
 
 		if (outboundQ.isEmpty() && !bCloseScheduled) {
@@ -224,12 +214,12 @@ public class EventableSocketChannel extends EventableChannel<ByteBuffer> {
 		// the outbound queue.
 		return (bCloseScheduled && outboundQ.isEmpty()) ? false : true;
  	}
-
+	
 	public void setConnectPending() {
 		bConnectPending = true;
 		updateEvents();
 	}
-
+	
 	/**
 	 * Called by the reactor when we have selected connectable.
 	 * Return false to indicate an error that should cause the connection to close.
@@ -245,13 +235,11 @@ public class EventableSocketChannel extends EventableChannel<ByteBuffer> {
 			return false;
 		}
 	}
-
+	
 	public boolean scheduleClose (boolean afterWriting) {
 		// TODO: What the hell happens here if bConnectPending is set?
-		if (!afterWriting) {
+		if (!afterWriting)
 			outboundQ.clear();
-			outboundS = 0;
-		}
 
 		if (outboundQ.isEmpty())
 			return true;
@@ -266,7 +254,7 @@ public class EventableSocketChannel extends EventableChannel<ByteBuffer> {
 		this.keyStore = keyStore;
 		this.verifyPeer = verifyPeer;
 	}
-
+	
 	public void startTls() {
 		if (sslBox == null) {
 			Object[] peerName = getPeerName();
@@ -277,7 +265,7 @@ public class EventableSocketChannel extends EventableChannel<ByteBuffer> {
 			updateEvents();
 		}
 	}
-
+	
 	public Object[] getPeerName () {
 		Socket sock = channel.socket();
 		return new Object[]{ sock.getPort(), sock.getInetAddress().getHostAddress() };
@@ -312,30 +300,6 @@ public class EventableSocketChannel extends EventableChannel<ByteBuffer> {
 	}
 	public boolean isNotifyWritable() { return bNotifyWritable; }
 
-	public boolean pause() {
-		if (bWatchOnly) {
-			throw new RuntimeException ("cannot pause/resume 'watch only' connections, set notify readable/writable instead");
-		}
-		boolean old = bPaused;
-		bPaused = true;
-		updateEvents();
-		return !old;
-	}
-
-	public boolean resume() {
-		if (bWatchOnly) {
-			throw new RuntimeException ("cannot pause/resume 'watch only' connections, set notify readable/writable instead");
-		}
-		boolean old = bPaused;
-		bPaused = false;
-		updateEvents();
-		return old;
-	}
-
-	public boolean isPaused() {
-		return bPaused;
-	}
-
 	private void updateEvents() {
 		if (channelKey == null)
 			return;
@@ -358,7 +322,7 @@ public class EventableSocketChannel extends EventableChannel<ByteBuffer> {
 			if (bNotifyWritable)
 				events |= SelectionKey.OP_WRITE;
 		}
-		else if (!bPaused)
+		else
 		{
 			if (bConnectPending)
 				events |= SelectionKey.OP_CONNECT;
@@ -385,7 +349,7 @@ public class EventableSocketChannel extends EventableChannel<ByteBuffer> {
 	@Override
 	protected boolean performHandshake() {
 		if (sslBox == null) return true;
-
+		
 		if (sslBox.handshake(channelKey)) {
 			if (!sslBox.handshakeNeeded()) {
 				callback.trigger(binding, EventCode.EM_SSL_HANDSHAKE_COMPLETED, null, 0);
@@ -399,7 +363,7 @@ public class EventableSocketChannel extends EventableChannel<ByteBuffer> {
 	public void acceptSslPeer() {
 		this.shouldAcceptSslPeer = true;
 	}
-
+	
 	public class CallbackBasedTrustManager implements X509TrustManager {
 		public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
 			if (verifyPeer) fireEvent(chain[0]);
@@ -414,12 +378,12 @@ public class EventableSocketChannel extends EventableChannel<ByteBuffer> {
 		}
 
 		private void fireEvent(X509Certificate cert) throws CertificateException {
-
+			
 			ByteBuffer data = ByteBuffer.wrap(cert.getEncoded());
-
+			
 			callback.trigger(binding, EventCode.EM_SSL_VERIFY, data, 0);
-
-			// If we should accept, the trigger will ultimately call our acceptSslPeer method.
+			
+			// If we should accept, the trigger will ultimately call our acceptSslPeer method. 
 			if (! shouldAcceptSslPeer) {
 				throw new CertificateException("JRuby trigger was not fired");
 			}
