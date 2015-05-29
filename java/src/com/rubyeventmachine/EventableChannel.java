@@ -73,7 +73,14 @@ public abstract class EventableChannel<OutboundPacketType> {
 
 	public void setCommInactivityTimeout (long seconds) {
 		// TODO
-		System.out.println ("SET COMM INACTIVITY UNIMPLEMENTED IN JRUBY" + seconds);
+               /**
+                * A proper fix will require implementing a heartbeat in
+                * the java reactor similar to the one used for connect
+                * timeouts in the c++ reactor. You could also emulate
+                * it with timers in the jeventmachine.rb wrapper.
+                *
+                * https://github.com/igrigorik/em-http-request/issues/85
+                */
 	}
 
 	public abstract Object[] getPeerName();
