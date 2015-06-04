@@ -134,6 +134,8 @@ module EventMachine
   def self.set_comm_inactivity_timeout sig, interval
     @em.setCommInactivityTimeout sig, interval
   end
+  def self.get_comm_inactivity_timeout sig
+  end
   def self.set_pending_connect_timeout sig, val
   end
   def self.set_heartbeat_interval val
