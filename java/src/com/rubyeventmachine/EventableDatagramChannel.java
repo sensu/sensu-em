@@ -74,6 +74,7 @@ public class EventableDatagramChannel extends EventableChannel<DatagramPacket> {
 	}
 	
 	public boolean scheduleClose (boolean afterWriting) {
+               bCloseScheduled = true;
 		return false;
 	}
 	
