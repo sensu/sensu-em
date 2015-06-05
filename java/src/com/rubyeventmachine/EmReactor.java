@@ -128,9 +128,11 @@ public class EmReactor {
 				callback.trigger(b, EventCode.EM_CONNECTION_UNBOUND, null, (long) 0);
 				ec.close();
 
-				EventableSocketChannel sc = (EventableSocketChannel) ec;
-				if (sc != null && sc.isAttached())
-					DetachedConnections.add (sc);
+                               if (!(ec instanceof EventableDatagramChannel)) {
+                                   EventableSocketChannel sc = (EventableSocketChannel) ec;
+                                   if (sc != null && sc.isAttached())
+                                       DetachedConnections.add (sc);
+                               }
 			}
 		}
 		UnboundConnections.clear();
