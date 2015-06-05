@@ -74,8 +74,15 @@ public class EventableDatagramChannel extends EventableChannel<DatagramPacket> {
 	}
 	
 	public boolean scheduleClose (boolean afterWriting) {
-               bCloseScheduled = true;
-		return false;
+               if (!afterWriting)
+                   outboundQ.clear();
+
+               if (outboundQ.isEmpty())
+                   return true;
+               else {
+                   bCloseScheduled = true;
+                   return false;
+               }
 	}
 	
 	public void startTls() {
