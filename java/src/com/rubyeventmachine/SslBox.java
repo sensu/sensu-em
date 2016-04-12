@@ -38,7 +38,7 @@ public class SslBox {
     
 	public SslBox(boolean isServer, SocketChannel channel, KeyStore keyStore, X509TrustManager tm, boolean verifyPeer, String host, int port) {
 		try {
-			sslContext = SSLContext.getInstance("TLS");
+			sslContext = SSLContext.getInstance("TLSv1.2");
 			KeyManager[] keyManagers = null;
 
 			if (keyStore != null) {
