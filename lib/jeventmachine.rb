@@ -302,14 +302,14 @@ module EventMachine
 end
 
 module KeyStoreBuilder
-  require 'bouncy-castle-java'
   java_import java.io.FileReader
   java_import java.io.FileInputStream
   java_import java.security.cert.Certificate
   java_import java.security.cert.CertificateFactory
   java_import java.security.KeyStore
   java_import java.security.Security
-  java_import org.bouncycastle.openssl.PEMReader
+  java_import org.bouncycastle.openssl.PEMParser
+  java_import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter
   java_import org.bouncycastle.jce.provider.BouncyCastleProvider
   @name = 'em_java_tls_key' # TODO - find a correct value, or whether it even really matters.
   @initialized = false
@@ -325,14 +325,17 @@ module KeyStoreBuilder
     self.init
 
     key_reader = FileReader.new privkeyfile
-    key_pair = PEMReader.new(key_reader).read_object
+    key_pair = PEMParser.new(key_reader).read_object
 
     cert_stream = FileInputStream.new certchainfile
     certs = CertificateFactory.get_instance('X.509', 'BC').generate_certificates cert_stream
 
+    converter = JcaPEMKeyConverter.new
+    private_key = converter.get_private_key(key_pair.get_private_key_info)
+
     store = KeyStore.get_instance 'PKCS12', 'BC'
     store.load nil, nil
-    store.set_key_entry @name, key_pair.get_private, nil, certs.to_array(Certificate[certs.size].new)
+    store.set_key_entry @name, private_key, nil, certs.to_array(Certificate[certs.size].new)
 
     store
   end
