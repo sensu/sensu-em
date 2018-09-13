@@ -122,7 +122,8 @@ public class EmReactor {
 	}
 
 	void removeUnboundConnections() {
-		for (long b : UnboundConnections) {
+		ArrayList<Long> unboundConnections = (ArrayList<Long>) UnboundConnections.clone();
+		for (long b : unboundConnections) {
 			EventableChannel<?> ec = Connections.remove(b);
 			if (ec != null) {
 				callback.trigger(b, EventCode.EM_CONNECTION_UNBOUND, null, (long) 0);
